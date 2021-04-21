@@ -1,0 +1,141 @@
+#notes- this isn't looping through all of the years and it's getting too late to figure out why. 
+#maybe another time.
+
+#inspiration from here https://github.com/nrennie/tidytuesday/blob/main/2021/13-04-2021/13042021.R
+
+library(tidyverse)
+library(dplyr)
+library(maps)
+library(magick)
+library(extrafont)
+#I don't know if I needed this one but I ran into problems with magick and in order to even get the basic example
+#on the magick site to work, I needed this package.
+library(rsvg)
+
+
+#get the content
+post_offices <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-04-13/post_offices.csv')
+
+#take a look at it
+head(post_offices)
+names(post_offices)
+
+po_ca<- post_offices %>%
+  filter(state=="CA") %>%
+  select(c(gnis_latitude, gnis_longitude, established, discontinued))%>%
+  drop_na(c(gnis_latitude, gnis_longitude))
+
+#setting some kind of boundary year, just following along on a script w/o comments
+select_year<-1850
+#filter for p.offices established before year and still open or where open at that time?
+d<-filter(po_ca, established<=select_year & (select_year < discontinued | is.na(discontinued)))
+
+
+states<- map_data("state")
+ca <- subset(states, region %in% c("california"))
+
+#making chart
+#make california shape and color
+p<-ggplot() +
+  geom_polygon(data = ca, aes(x = long, y = lat), fill ="#8c96c6", color = "black") +
+#something add dots for post office
+  geom_point(data=d, aes(x=gnis_longitude, y=gnis_latitude), color ="#6e016b", size=0.7) +
+#titles and such  
+  labs(caption="Some info in a caption") +
+#I don't know why I had to position this annotation at these random spots, but that is what worked.  
+  annotate(geom ="text", x=-116, y=40, label=select_year, color="black", size=8) +
+#adding fancy themese  
+  theme(axis.text=element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title=element_blank(),
+        plot.background = element_rect(fill = "#e0ecf4", color = NA),
+        panel.background = element_rect(fill = "#e0ecf4"),
+        plot.margin = unit(c(0.5, 0.5, 0.3, 0.3), "cm"),
+        legend.background = element_rect(color = NA,fill="transparent"),
+        legend.box.background = element_rect(fill = "transparent",color=NA),
+        legend.position=c(1,1),legend.justification=c(1,1),
+        plot.title = element_text(colour = "#6e016b", size=18, face="bold", hjust=0),
+        plot.subtitle = element_text(colour = "#6e016b", size=10, hjust=0 ),
+        plot.caption = element_text(colour = "#6e016b", size = 8, hjust=1),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        axis.line.x = element_blank(),
+        axis.line.y = element_blank(),
+        legend.title=element_blank(),
+        legend.key = element_blank())
+
+#save chart
+ggsave(p, filename = paste(select_year, ".jpg"), height=5, width=4, unit="in")
+  
+#make animation
+
+all_years <- 1849:1983
+make_plot <- function(select_year){
+  d <- filter(po_ca, established <= select_year & (select_year < discontinued | is.na(discontinued)) & select_year<1984)
+  states <- map_data("state")
+  ca <- subset(states, region %in% c("california"))
+  p <- ggplot() + 
+    geom_polygon(data = ca, aes(x = long, y = lat), fill = "#8c96c6", color = "black") +
+    geom_point(data=d, aes(x=gnis_longitude, y=gnis_latitude), colour="#6e016b", size=0.7) +
+    labs(caption="\nN. Rennie | Data: Harvard Dataverse", title="California Post Offices", 
+         subtitle="a subtitle") +
+    annotate("text", x=-116.5, y=40, label=select_year, colour = "#6e016b", fontface=2, size=10) +
+    theme(axis.text=element_blank(),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title=element_blank(),
+          plot.background = element_rect(fill = "#e0ecf4", color = NA),
+          panel.background = element_rect(fill = "#e0ecf4"),
+          plot.margin = unit(c(0.5, 0.5, 0.3, 0.3), "cm"),
+          legend.background = element_rect(color = NA,fill="transparent"),
+          legend.box.background = element_rect(fill = "transparent",color=NA),
+          legend.position=c(1,1),legend.justification=c(1,1),
+          plot.title = element_text(colour = "#6e016b", size=18, face="bold", hjust=0),
+          plot.subtitle = element_text(colour = "#6e016b", size=10, hjust=0),
+          plot.caption = element_text(colour = "#6e016b", size = 8, hjust=1),
+          panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          axis.line.x = element_blank(),
+          axis.line.y = element_blank(),
+          legend.title=element_blank(),
+          legend.key = element_blank())
+p
+ggsave(p, filename = paste(select_year, ".png"), height=5, width=4, unit="in")
++select_year == select_year+1
+}
+p
+
+sapply(all_years, function(x) make_plot(x))
+
+number_offices <- function(select_year){
+  d <- filter(po_ca, established <= select_year & (select_year < discontinued | is.na(discontinued)))
+  return(nrow(d))
+}
+n <- sapply(all_years, function(x) number_offices(x))
+
+#make gif--this part doesn't work
+imgs <- list.files(full.names = TRUE)
+
+imgs2 <-list.files(pat = ".",pattern = "png", full.names=T)
+allInfo = image_info(image_read(imgs2))
+
+##I added this part to get the animations to work
+allInfo$fileName = imgs2
+imgs2
+
+img_list <- lapply(imgs2, image_read)
+img_joined <- image_join(img_list)
+anim <- image_animate(image_scale(img_joined,"600x750"), fps = 10) 
+image_write(image = anim,path = "13042021.gif")
+
+
+
+
+a <-image_read("./1951 .png")
+imgs
+print(a)
